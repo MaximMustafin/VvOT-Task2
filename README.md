@@ -17,3 +17,5 @@
 12) Создать api gateway itis-2022-2023-vvot09-api, использовать файл Yandex Cloud/api-gateway
 13) Создать telegram бота, используя BotFather
 14) Связать telegram бота с функцией vvot09-boot, используя webHook
+
+Бот - http://t.me/vvot09_bot
