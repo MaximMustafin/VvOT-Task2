@@ -19,3 +19,5 @@
 14) Связать telegram бота с функцией vvot09-boot, используя webHook
 
 Бот - http://t.me/vvot09_bot
+
+![image](https://user-images.githubusercontent.com/55633467/211595446-8197cef0-3209-4f86-ba15-8201d4bcd7e9.png)
