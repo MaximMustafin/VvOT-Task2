@@ -11,11 +11,26 @@ paths:
         type: object_storage
         bucket: itis-2022-2023-vvot09-faces
         object: '{face}'
-        service_account_id: ajefk2djvpbht9297t8j
+        service_account_id: ajeoq2fvdjma1hm14bm9
       parameters:
       - explode: false
         in: query
         name: face
+        required: true
+        schema:
+          type: string
+        style: simple
+  /photo:
+    get:
+      x-yc-apigateway-integration:
+        type: object_storage
+        bucket: itis-2022-2023-vvot09-photos
+        object: '{name}'
+        service_account_id: ajeoq2fvdjma1hm14bm9
+      parameters:
+      - explode: false
+        in: query
+        name: name
         required: true
         schema:
           type: string

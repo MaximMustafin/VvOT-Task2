@@ -22,6 +22,7 @@ def get_face(session):
         settings=ydb.BaseRequestSettings().with_timeout(3).with_operation_timeout(2)
     )
 
+
 text = ""
 def handler(event, context):
     request_body = json.loads(event['body'])
@@ -51,13 +52,13 @@ def handler(event, context):
             response_body = {
                 "method": "sendMessage",
                 "chat_id": request_body['message']['chat']['id'],
-                "text": "Имя фотографии лица успешно изменено"
+                "text": "Имя фото лица изменено"
             };
-
-    except:
+    except Exception as e:
+        print(e)
         if request_text == "/getface":
             try:
-                key = str(pool.retry_operation_sync(get_face)[0].rows[0].face)
+                key = pool.retry_operation_sync(get_face)[0].rows[0].face.decode("utf-8") 
                 photo = f"{os.getenv('API_GATEWAY')}/?face={key}"
                 print(photo)
                 response_body = {
@@ -74,10 +75,10 @@ def handler(event, context):
                     "text": 'У всех фото лиц есть имена'
                 };
 
-
         elif request_text.startswith("/find"):
             try:
                 name = "".join(request_text.split("/find ")[1:])
+                print('Имя', name)
 
                 def get_photos(session):
                     return session.transaction().execute(
@@ -96,10 +97,10 @@ def handler(event, context):
                     };
                 else:
                     for i in photos_names:
-                        text = str(i.get('photo'))
+                        text = i.get('photo').decode("utf-8") 
                         photos.append(
                             {"type": "photo",
-                             "media": f"https://storage.yandexcloud.net/itis-2022-2023-vvot09-photos/{text}"})
+                            "media": f"{os.getenv('API_GATEWAY')}/photo?name={text}"})
 
                     response_body = {
                         "method": "sendMediaGroup",
@@ -121,14 +122,14 @@ def handler(event, context):
                     "text": text
                 };
 
-
         else:
-            text = "Команды:\n /getface - Присылает фото лица с неопределённым именем. Чтобы присвоить имя лицу, необходимо в ответ на фото отправить имя.\n /find {name} - Присылает все фотограйии с {name}."
+            text = "Команды:\n /getface - Присылает фото лица без имени. Чтобы присвоить имя фото лица, необходимо в ответ на фото отправить имя.\n /find {name} - Присылает все фотографии с именем {name}."
             response_body = {
                 "method": "sendMessage",
                 "chat_id": request_body['message']['chat']['id'],
                 "text": text
             };
+        
 
     return {
         'statusCode': 200,

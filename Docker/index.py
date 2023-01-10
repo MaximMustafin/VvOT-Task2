@@ -6,7 +6,7 @@ import os
 import sanic.response as response
 from sanic import Sanic
 from sanic.response import text
-from PIL import Image
+from PIL import Image, ImageDraw
 from io import BytesIO
 
 
@@ -23,10 +23,8 @@ async def hello(request):
     print('The latest version')
     msg = json.loads(request.json['messages'][0]['details']['message']['body'])
     photo = msg['object_id']
-    left = int(msg['vertices'][0]['x'])
-    top = int(msg['vertices'][0]['y'])
-    right = int(msg['vertices'][2]['x'])
-    bottom = int(msg['vertices'][2]['y'])
+    left_top = (int(msg['vertices'][0]['x']), int(msg['vertices'][0]['y']))
+    right_bottom = (int(msg['vertices'][2]['x']), int(msg['vertices'][2]['y']))
 
     photos_bucket = 'itis-2022-2023-vvot09-photos'
     faces_bucket = 'itis-2022-2023-vvot09-faces'
@@ -45,55 +43,30 @@ async def hello(request):
     s3.download_fileobj(photos_bucket, photo, img_file)
     img = Image.open(img_file)
 
-    img.crop((left, top, right, bottom)).save(photo, quality=100)
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([left_top, right_bottom], outline="blue", width=8)
+
+    image_file = BytesIO()
+    img.save(image_file, format='JPEG')
+    image_file.seek(0)
 
     face_photo = str(request.json['messages'][0]['details']['message']['message_id']) + str(photo)
-    s3.upload_file(photo, faces_bucket, face_photo)
+    s3.upload_fileobj(image_file, faces_bucket, face_photo, ExtraArgs={'ContentType': 'image/jpeg'})
 
-    ydb_client = session.client(service_name='dynamodb', endpoint_url=os.getenv('ydb_endpoint_url'),
-                                aws_access_key_id=os.getenv('aws_access_key_id'),
-                                aws_secret_access_key=os.getenv('aws_secret_access_key'),
-                                region_name='ru-central1')
+    driver = ydb.Driver(endpoint=os.getenv('YDB_ENDPOINT'), database=os.getenv('YDB_DATABASE'))
+    driver.wait(fail_fast=True, timeout=5)
+    pool = ydb.SessionPool(driver)
 
-    try:
-        table = ydb_client.create_table(
-        TableName='faces',
-        KeySchema=[
-            {
-            'AttributeName': 'id',
-            'KeyType': 'HASH'
-            }
-        ],
-        AttributeDefinitions=[
-            {
-            'AttributeName': 'id',
-            'AttributeType': 'S'
-            },
-            {
-            'AttributeName': 'photo',
-            'AttributeType': 'S'
-            },
-            {
-            'AttributeName': 'face',
-            'AttributeType': 'S'
-            },
-            {
-            'AttributeName': 'name',
-            'AttributeType': 'S'
-            }
-            ]
-        )
-    except Exception:
-        pass
+    print(f"INSERT INTO faces (id, face, name, photo) VALUES ({str(request.json['messages'][0]['details']['message']['message_id'])}, {photo}, {face_photo}")
 
-    ydb_client.put_item(TableName='faces',
-                        Item=
-                        {
-                            'id': { 'S': str(request.json['messages'][0]['details']['message']['message_id']) },
-                            'name': { 'S': ''},
-                            'photo': { 'S': photo},
-                            'face': { 'S': face_photo}
-                        })
+    def add_row(session):
+         return session.transaction().execute(
+             f"INSERT INTO faces (id, face, name, photo) VALUES (\"{str(request.json['messages'][0]['details']['message']['message_id'])}\", \"{face_photo}\", \"\", \"{photo}\");",
+                 commit_tx=True,
+                settings=ydb.BaseRequestSettings().with_timeout(3).with_operation_timeout(2)
+                )
+
+    pool.retry_operation_sync(add_row)
 
     return response.json({'body': 'Ok'}, status=200)
 
